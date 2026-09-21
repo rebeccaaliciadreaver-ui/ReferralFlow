@@ -1,20 +1,26 @@
 # Analytics API integration
 
-The analytics flow now supports production-safe retries:
+The production path is now available without locking the project to a server framework:
 
-1. `createAnalyticsApiSink()` posts events to `/api/analytics/events` with credentials and an `Idempotency-Key`.
-2. The server requires an authenticated user and validates the event payload.
-3. The repository persists the event using `(user_id, idempotency_key)` as the duplicate boundary.
-4. KPI aggregation uses `countByNameSince()` and `startOfWeek()`.
+- `src/server/analyticsEvents.ts` validates authenticated events and idempotency keys.
+- `src/server/sqlAnalyticsRepository.ts` adapts any parameterized SQL client.
+- `src/server/analyticsRoutes.ts` exposes POST handling and weekly KPI aggregation.
+- `src/services/analyticsApiSink.ts` sends browser events with credentials and retry-safe keys.
+- `docs/marketing_events.sql` defines the table, uniqueness constraint, and KPI index.
 
-`docs/marketing_events.sql` contains the database schema and indexes. Implement `AnalyticsEventRepository` with your database driver, then adapt your framework route:
+## Route wiring
 
 ```ts
-const result = await postAnalyticsEvent(
-  { user: session?.user ? { id: session.user.id } : null, body: await request.json(), idempotencyKey: request.headers.get('idempotency-key') ?? undefined },
-  analyticsRepository,
+const repository = new SqlAnalyticsRepository((sql, params) => db.query(sql, params));
+const result = await postAnalyticsRoute(
+  {
+    user: session?.user ? { id: session.user.id } : null,
+    body: await request.json(),
+    idempotencyKey: request.headers.get('idempotency-key') ?? undefined,
+  },
+  repository,
 );
 return Response.json(result.body, { status: result.status });
 ```
 
-The in-memory repository remains for tests only. Do not use it in production.
+For the dashboard, call `getWeeklyKpis(user.id, repository, ['user.signed_up', 'challenge.completed', 'referral.link_sent'])` and map the result to the configured targets. Use a database transaction or an atomic `ON CONFLICT` insert in production, as provided by the SQL adapter.
