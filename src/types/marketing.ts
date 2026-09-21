@@ -27,6 +27,8 @@ export interface MarketingEvent {
   channel?: MarketingChannelId;
   occurredAt: string;
   metadata?: Record<string, string | number | boolean>;
+  /** Stable key used to make client retries idempotent. */
+  idempotencyKey?: string;
 }
 
 export const marketingChannels: MarketingChannel[] = [

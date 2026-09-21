@@ -1,27 +1,20 @@
 # Analytics API integration
 
-`src/server/analyticsEvents.ts` provides the server-side boundary for KPI events:
+The analytics flow now supports production-safe retries:
 
-- Requires an authenticated user.
-- Validates the event name and timestamp.
-- Adds the authenticated `userId`, event ID, and server receipt time.
-- Returns `201` for a new event and `200` for a duplicate.
-- Provides `AnalyticsEventRepository` so the host can use Postgres, Supabase, or another database.
+1. `createAnalyticsApiSink()` posts events to `/api/analytics/events` with credentials and an `Idempotency-Key`.
+2. The server requires an authenticated user and validates the event payload.
+3. The repository persists the event using `(user_id, idempotency_key)` as the duplicate boundary.
+4. KPI aggregation uses `countByNameSince()` and `startOfWeek()`.
 
-`src/server/inMemoryAnalyticsRepository.ts` is only a development/test adapter. It is not durable and should not be used in production.
-
-## Host framework adapter
-
-In an API route, resolve the session before calling the handler:
+`docs/marketing_events.sql` contains the database schema and indexes. Implement `AnalyticsEventRepository` with your database driver, then adapt your framework route:
 
 ```ts
 const result = await postAnalyticsEvent(
-  { user: session?.user ? { id: session.user.id } : null, body: await request.json() },
+  { user: session?.user ? { id: session.user.id } : null, body: await request.json(), idempotencyKey: request.headers.get('idempotency-key') ?? undefined },
   analyticsRepository,
 );
 return Response.json(result.body, { status: result.status });
 ```
 
-Implement `AnalyticsEventRepository` with a database table containing a unique event ID and indexes on `(user_id, name, occurred_at)`. For reliable client retries, use a client-generated idempotency key as the unique key instead of generating the ID only on the server.
-
-The repository intentionally does not choose an auth provider, server framework, or database driver because this project currently contains no backend runtime or database configuration.
+The in-memory repository remains for tests only. Do not use it in production.
