@@ -4,10 +4,13 @@ The marketing page is available at `src/pages/marketing.tsx`. It accepts a `User
 
 ## Host integration
 
-Mount `MarketingRoute` at the host application's marketing route and pass the logged-in profile:
+Mount `MarketingRoute` at the host application's marketing route and pass the logged-in profile. Provide an `onEvent` sink that writes events to your authenticated backend:
 
 ```tsx
-<MarketingRoute profile={{ id: user.id, displayName: user.name, avatarUrl: user.avatarUrl }} />
+<MarketingPage
+  profile={{ id: user.id, displayName: user.name, avatarUrl: user.avatarUrl }}
+  onEvent={(event) => api.post('/analytics/events', event)}
+/>
 ```
 
 The three one-click KPI trackers emit these events:
@@ -16,4 +19,4 @@ The three one-click KPI trackers emit these events:
 - `challenge.completed` — target 200 per week
 - `referral.link_sent` — target 80 per week
 
-Channel activity emits `marketing.channel_engaged` with the channel ID. The included analytics service is an in-memory adapter suitable for the UI; connect `trackMarketingEvent` to your durable analytics provider at the application boundary before production. The page intentionally does not fabricate historical metrics.
+Channel activity emits `marketing.channel_engaged` with the channel ID. The `MarketingEventSink` adapter keeps persistence outside the UI and supports synchronous or asynchronous API clients. The page intentionally does not fabricate historical metrics; pass persisted events through `initialEvents` when loading the page.

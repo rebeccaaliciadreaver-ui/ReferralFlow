@@ -6,8 +6,12 @@ export interface KpiSnapshot {
   percentage: number;
 }
 
+/** Persistence boundary for production analytics providers or API clients. */
+export type MarketingEventSink = (event: MarketingEvent) => void | Promise<void>;
+
 export function isWithinCurrentWeek(timestamp: string, now = new Date()): boolean {
   const date = new Date(timestamp);
+  if (Number.isNaN(date.getTime())) return false;
   const start = new Date(now);
   const day = start.getDay();
   const daysSinceMonday = (day + 6) % 7;
@@ -23,11 +27,24 @@ export function getKpiSnapshots(events: MarketingEvent[], kpis: MarketingKpi[], 
   });
 }
 
+export function createMarketingEvent(
+  name: string,
+  channel?: MarketingEvent['channel'],
+  metadata?: MarketingEvent['metadata'],
+  occurredAt = new Date().toISOString(),
+): MarketingEvent {
+  return { name, channel, metadata, occurredAt };
+}
+
+/** Adds an event locally and forwards it to an optional durable sink. */
 export function trackMarketingEvent(
   events: MarketingEvent[],
   name: string,
   channel?: MarketingEvent['channel'],
   metadata?: MarketingEvent['metadata'],
+  sink?: MarketingEventSink,
 ): MarketingEvent[] {
-  return [{ name, channel, metadata, occurredAt: new Date().toISOString() }, ...events];
+  const event = createMarketingEvent(name, channel, metadata);
+  void sink?.(event);
+  return [event, ...events];
 }
